@@ -1,15 +1,23 @@
 const createError = require('http-errors');
 const express = require('express');
+const session = require('express-session');
 const ejs = require('ejs');
 const ejsLint = require('ejs-lint');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+const authTransaction = require('./routes/auth/okta-transact/middlewares/authTransaction');
+const oidcConfig = require('./routes/auth/okta-transact/middlewares/oidcConfig');
+const flowStates = require('./routes/auth/okta-transact/middlewares/flowStates');
 
 var indexRouter = require('./routes/index');
-var loginRouter = require('./routes/login');
+var loginRouter = require('./routes/auth/login');
+var terminalRouter = require('./routes/auth/terminal');
 
-var app = express();
+const getConfig = require('./config/config.js');
+const { port } = getConfig().webServer;
+
+const app = express();
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -17,12 +25,21 @@ app.set('view engine', 'ejs');
 
 app.use(logger('dev'));
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
+app.use(session({
+  secret: 'this-should-be-very-random',
+  resave: true,
+  saveUninitialized: false
+}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(flowStates);
+app.use(authTransaction);
+app.use(oidcConfig);
 
 app.use('/', indexRouter);
 app.use('/login', loginRouter);
+app.use('/terminal', terminalRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
